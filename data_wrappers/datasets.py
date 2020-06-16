@@ -3,7 +3,8 @@ import warnings
 from sklearn.model_selection import StratifiedKFold
 from sklearn.utils import shuffle as skl_shuffle
 import numpy as np
-from ifclibs import training, loaders, cleaning
+from ifclibs import loaders, cleaning, organizing
+import pickle
 
 __author__ = "Miquel Perello Nieto"
 __credits__ = ["Miquel Perello Nieto"]
@@ -18,10 +19,13 @@ import urllib
 from os.path import isfile
 
 class Dataset(object):
-    def __init__(self, name, data, target, shuffle=False, random_state=None):
+    def __init__(self, name, data, target, test_fold, nested_test_folds, class_labels, shuffle=False, random_state=None):
         self.name = name
-        self._data = self.standardize_data(data)
-        self._target, self._classes, self._names, self._counts = self.standardize_targets(target)
+        # self._data = self.standardize_data(data)
+        self._data = data
+        self._target, self._classes, self._counts = self.standardize_targets(target)
+        self._names = class_labels
+        self._folds = (test_fold, nested_test_folds, len(np.unique(test_fold)), len(np.unique(nested_test_folds[0])))
         if shuffle:
             self.shuffle(random_state=random_state)
 
@@ -38,16 +42,8 @@ class Dataset(object):
 
     def standardize_targets(self, target):
         target = np.squeeze(target)
-        names, counts = np.unique(target, return_counts=True)
-        new_target = np.empty_like(target, dtype=int)
-        for i, name in enumerate(names):
-            new_target[target==name] = i
-        classes = range(len(names))
-        if type(names[0]) is np.ndarray:
-            names = [''.join(name) for name in names]
-        else:
-            names = [str(name) for name in names]
-        return new_target, classes, names, counts
+        classes, counts = np.unique(target, return_counts=True)
+        return target, classes, counts
 
     def separate_sets(self, x, y, test_fold_id, test_folds):
         x_test = x[test_folds == test_fold_id, :]
@@ -67,6 +63,10 @@ class Dataset(object):
     @property
     def target(self):
         return self._target
+    
+    @property
+    def folds(self):
+        return self._folds
 
     #@target.setter
     #def target(self, new_value):
@@ -116,5 +116,26 @@ class Dataset(object):
 
 class Data:
 
-    def __init__(self):
+    def __init__(self, random_state):
         self.datasets = {}
+
+        # initialize wbc dataset
+        WBC_DATA = "/home/maximl/Data/Experiment_data/newcastle/wbc/ideas_234_fluo.fcs"
+        WBC_FOLDS = "/home/maximl/Data/Experiment_data/newcastle/wbc/samplesplit_234_nested_3fold.pkl"
+
+        with open(WBC_FOLDS, "rb") as pkl:
+            test_fold, nested_test_folds = pickle.load(pkl)
+
+        data, y, sets, meta = loaders.load_features_from_ideas_fcs(WBC_DATA, keep_regex="(?i).*(BF|SSC|M01|M06|M09).*")
+        data = cleaning.remove_unwanted(data)
+        _, categorical, _ = organizing.group_features_per_category(data)
+        data = data.drop(columns=categorical.columns)
+
+        self.datasets['wbc'] = Dataset(
+            name="wbc",
+            data=data.values,
+            target=y.values,
+            test_fold=test_fold,
+            nested_test_folds=nested_test_folds,
+            class_labels=meta["class_labels"].split("|")
+        )

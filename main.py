@@ -8,7 +8,6 @@ import argparse
 import os
 import pandas
 import numpy as np
-import pickle
 
 # Classifiers
 from sklearn.model_selection import StratifiedKFold
@@ -133,7 +132,6 @@ def parse_arguments():
     parser.add_argument('-i', '--iterations', dest='mc_iterations', type=int,
                         default=2,
                         help='Number of Markov Chain iterations')
-    parser.add_argument("-f", "--folds", dest="folds", type=str, help="Pickle file containing outer and inner folds.")
     parser.add_argument('-o', '--output-path', dest='results_path', type=str,
                         default='results_test',
                         help='''Path to store all the results''')
@@ -141,11 +139,6 @@ def parse_arguments():
                         type=int, default=logging.INFO,
                         help='''Show additional messages, from 10 (debug) to
                         50 (fatal)''')
-    parser.add_argument('-d', '--datasets', dest='datasets',
-                        type=comma_separated_strings,
-                        default=['iris', 'car'],
-                        help='''Comma separated dataset names or one of the
-                        defined groups in the datasets package''')
     parser.add_argument('-m', '--methods', dest='methods',
                         type=comma_separated_strings,
                         default=['uncalibrated', 'isotonic',
@@ -210,11 +203,12 @@ def compute_all(args):
     score_type = score_types[classifier_name]
     logging.info(locals())
 
-    skf = training.RandomOversamplingPredefinedSplit(test_fold, indices=True)
+    skf = training.RandomOversamplingPredefinedSplit(folds=test_fold, indices=True)
     df = MyDataFrame(columns=columns)
     class_counts = np.bincount(dataset.target)
     t = dataset.target
     fold_id = 0
+    n_folds = skf.get_n_splits()
     for i, ((train_idx, test_idx), nested_test_fold) in enumerate(zip(skf.split(X=dataset.data,
                                                         y=dataset.target), nested_test_folds)):
         logging.info('Dataset {}, Monte Carlo iteration {}, fold {} of {}'.format(
@@ -222,7 +216,7 @@ def compute_all(args):
         x_train, y_train = dataset.data[train_idx], dataset.target[train_idx]
         x_test, y_test = dataset.data[test_idx], dataset.target[test_idx]
 
-        cv = training.RandomOversamplingPredefinedSplit(nested_test_fold, indices=True)
+        cv = training.RandomOversamplingPredefinedSplit(folds=nested_test_fold, indices=True)
 
         results = cv_calibration(classifier, methods, x_train, y_train, x_test,
                                  y_test, cv=cv, score_type=score_type,
@@ -255,50 +249,44 @@ def compute_all(args):
 
 
 # FIXME seed_num is not being used at the moment
-def main(seed_num, mc_iterations, folds, classifier_names, results_path,
-		 verbose, datasets, methods, n_workers, fig_titles=False):
+def main(seed_num, mc_iterations, classifier_names, results_path,
+		 verbose, methods, n_workers, fig_titles=False):
     if not fig_titles:
         title = None
     logging.basicConfig(level=verbose)
     logging.info(locals())
 
-    dataset_names = datasets
-    dataset_names.sort()
     columns_hist = ['classifier', 'dataset', 'calibration'] + \
                    ['{}-{}'.format(i/10, (i+1)/10) for i in range(0,10)]
     
-    with open(folds, "rb") as pkl:
-        test_fold, nested_test_folds = pickle.load(pkl)
+    data = Data(random_state=seed_num)
 
-    data = Data(dataset_names=dataset_names, shuffle=True,
-                random_state=seed_num)
-
-    classifier_names.sort()
     results_path_root = results_path
     for classifier_name in classifier_names:
         results_path = os.path.join(results_path_root, classifier_name)
 
         for name, dataset in data.datasets.items():
+
+            test_fold, nested_test_folds, n_folds, n_inner_folds = dataset.folds
+
             df = MyDataFrame(columns=columns)
             logging.info(dataset)
             # Assert that every class has enough samples to perform the two
             # cross-validataion steps (classifier + calibrator)
             smaller_count = min(dataset.counts)
             if (smaller_count < n_folds) or \
-               ((smaller_count*(n_folds-1)/n_folds) < inner_folds):
+               ((smaller_count*(n_folds-1)/n_folds) < n_inner_folds):
                 logging.warn(("At least one of the classes does not have enough "
                              "samples for outer {} folds and inner {} folds"
-                            ).format(n_folds, inner_folds))
-                # TODO Remove problematic class instead
+                            ).format(n_folds, n_inner_folds))
                 logging.warn("Removing dataset from experiments and skipping")
-                dataset_names = [aux for aux in dataset_names if aux != name]
                 continue
 
             mcs = np.arange(mc_iterations)
             logging.info(dataset)
             #shared.setConst(**{name: dataset})
             # All the arguments as a list of lists
-            args = [[dataset], [test_fold], [nested_test_folds], [inner_folds], mcs, [classifier_name],
+            args = [[dataset], [test_fold], [nested_test_folds], mcs, [classifier_name],
                     methods, [verbose]]
             args = list(itertools.product(*args))
 
