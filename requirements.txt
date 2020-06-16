@@ -13,3 +13,4 @@ jaxlib
 PyQt5
 PyQtWebEngine
 orange3
+joblib

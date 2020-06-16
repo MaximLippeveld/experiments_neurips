@@ -20,6 +20,8 @@ from calib.utils.functions import beta_test
 from calib.utils.functions import fit_beta_moments
 from calib.utils.functions import fit_beta_midpoint
 
+from ifclibs.training import RandomOversamplingPredefinedSplit
+
 logger = logging.getLogger(__name__)
 
 def get_calibrated_scores(classifiers, methods, scores):
@@ -34,7 +36,7 @@ def get_calibrated_scores(classifiers, methods, scores):
 
 
 def cv_calibration(base_classifier, methods, x_train, y_train, x_test,
-                   y_test, cv=3, score_type=None,
+                   y_test, cv, score_type=None,
                     verbose=NameError, seed=None):
     ''' Train a classifier with the specified dataset and calibrate
 
@@ -52,11 +54,9 @@ def cv_calibration(base_classifier, methods, x_train, y_train, x_test,
         Test data.
     y_test : array-like of integers, shape (n_test_samples,)
         Labels for each test sample in integer form
-    cv : int
+    cv : training.RandomOVersamplingPredefinedsplit
         Number of folds to perform in the training set, to train the classifier
-        and the calibrator. The classifier is always trained in the bigger
-        fold, while the calibrator is trained in the remaining 1 fold. This is
-        repeated 'cv' times.
+        and the calibrator. 
     score_type : string
         String indicating the function to call to obtain predicted
         probabilities from the classifier.
@@ -100,8 +100,7 @@ def cv_calibration(base_classifier, methods, x_train, y_train, x_test,
     train_full_ece = {method: 0 for method in methods}
     train_mce = {method: 0 for method in methods}
 
-    skf = StratifiedKFold(n_splits=cv, shuffle=True, random_state=seed)
-    for i, (train, cali) in enumerate(skf.split(X=x_train, y=y_train)):
+    for i, (train, cali) in enumerate(cv.split(X=x_train, y=y_train)):
         print('Evaluation of split {} of {}'.format(i+1, cv))
         x_t = x_train[train]
         y_t = y_train[train]

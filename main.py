@@ -8,6 +8,7 @@ import argparse
 import os
 import pandas
 import numpy as np
+import pickle
 
 # Classifiers
 from sklearn.model_selection import StratifiedKFold
@@ -27,10 +28,11 @@ from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-
-
 from sklearn.svm import SVC
 from sklearn.preprocessing import label_binarize
+
+# ifc libs
+from ifclibs import training, loaders, cleaning
 
 # Parallelization
 import itertools
@@ -56,7 +58,6 @@ from calib.utils.plots import save_fig_close
 
 # Our datasets module
 from data_wrappers.datasets import Data
-from data_wrappers.datasets import datasets_non_binary
 
 import logging
 
@@ -132,13 +133,7 @@ def parse_arguments():
     parser.add_argument('-i', '--iterations', dest='mc_iterations', type=int,
                         default=2,
                         help='Number of Markov Chain iterations')
-    parser.add_argument('-f', '--folds', dest='n_folds', type=int,
-                        default=3,
-                        help='Folds to create for cross-validation')
-    parser.add_argument('--inner-folds', dest='inner_folds', type=int,
-                        default=3,
-                        help='''Folds to perform in any given training fold to
-                                train the different calibration methods''')
+    parser.add_argument("-f", "--folds", dest="folds", type=str, help="Pickle file containing outer and inner folds.")
     parser.add_argument('-o', '--output-path', dest='results_path', type=str,
                         default='results_test',
                         help='''Path to store all the results''')
@@ -174,12 +169,8 @@ def compute_all(args):
 
     name : string
         Name of the dataset to use
-    n_folds : int
-        Number of folds to perform n-fold-cross-validation to train and test
-        the classifier + calibrator.
-    inner_folds : int
-        The training set selected from the fold before, is divided into
-        training of the classifier and training of the calibrator.
+    folds : string
+        Pickle file containing outer and inner folds.
     mc : int
         Monte Carlo repetition index, in order to set different seeds to
         different repetitions, but same seed in calibrators in the same Monte
@@ -212,25 +203,29 @@ def compute_all(args):
         exec_time : float
             Mean calibration time for the inner folds
     '''
-    (dataset, n_folds, inner_folds, mc, classifier_name, methods, verbose) = args
+    (dataset, test_fold, nested_test_folds, mc, classifier_name, methods, verbose) = args
     if isinstance(methods, str):
         methods = (methods,)
     classifier = classifiers[classifier_name]
     score_type = score_types[classifier_name]
     logging.info(locals())
-    skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=mc)
+
+    skf = training.RandomOversamplingPredefinedSplit(test_fold, indices=True)
     df = MyDataFrame(columns=columns)
     class_counts = np.bincount(dataset.target)
     t = dataset.target
     fold_id = 0
-    for i, (train_idx, test_idx) in enumerate(skf.split(X=dataset.data,
-                                                        y=dataset.target)):
+    for i, ((train_idx, test_idx), nested_test_fold) in enumerate(zip(skf.split(X=dataset.data,
+                                                        y=dataset.target), nested_test_folds)):
         logging.info('Dataset {}, Monte Carlo iteration {}, fold {} of {}'.format(
               dataset, mc+1, i+1, n_folds))
         x_train, y_train = dataset.data[train_idx], dataset.target[train_idx]
         x_test, y_test = dataset.data[test_idx], dataset.target[test_idx]
+
+        cv = training.RandomOversamplingPredefinedSplit(nested_test_fold, indices=True)
+
         results = cv_calibration(classifier, methods, x_train, y_train, x_test,
-                                 y_test, cv=inner_folds, score_type=score_type,
+                                 y_test, cv=cv, score_type=score_type,
                                  verbose=verbose, seed=mc)
         (train_acc, train_loss, train_brier, train_guo_ece, train_cla_ece,
          train_full_ece, train_mce, accs, losses, briers,
@@ -260,8 +255,8 @@ def compute_all(args):
 
 
 # FIXME seed_num is not being used at the moment
-def main(seed_num, mc_iterations, n_folds, classifier_names, results_path,
-		 verbose, datasets, inner_folds, methods, n_workers, fig_titles=False):
+def main(seed_num, mc_iterations, folds, classifier_names, results_path,
+		 verbose, datasets, methods, n_workers, fig_titles=False):
     if not fig_titles:
         title = None
     logging.basicConfig(level=verbose)
@@ -271,6 +266,9 @@ def main(seed_num, mc_iterations, n_folds, classifier_names, results_path,
     dataset_names.sort()
     columns_hist = ['classifier', 'dataset', 'calibration'] + \
                    ['{}-{}'.format(i/10, (i+1)/10) for i in range(0,10)]
+    
+    with open(folds, "rb") as pkl:
+        test_fold, nested_test_folds = pickle.load(pkl)
 
     data = Data(dataset_names=dataset_names, shuffle=True,
                 random_state=seed_num)
@@ -300,7 +298,7 @@ def main(seed_num, mc_iterations, n_folds, classifier_names, results_path,
             logging.info(dataset)
             #shared.setConst(**{name: dataset})
             # All the arguments as a list of lists
-            args = [[dataset], [n_folds], [inner_folds], mcs, [classifier_name],
+            args = [[dataset], [test_fold], [nested_test_folds], [inner_folds], mcs, [classifier_name],
                     methods, [verbose]]
             args = list(itertools.product(*args))
 
