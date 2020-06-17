@@ -283,6 +283,7 @@ class CalibratedModel(BaseEstimator, ClassifierMixin):
         self.method = method
         self.base_estimator = base_estimator
         self.score_type = score_type
+        self.calibrator = None
 
     def fit(self, X, y, X_val=None, y_val=None, *args, **kwargs):
         """Fit the calibrated model

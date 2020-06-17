@@ -110,7 +110,7 @@ class OneVsRestCalibrator(BaseEstimator, ClassifierMixin):
         self.classes_ = self.label_binarizer_.classes_
         y_columns = (col.toarray().ravel() for col in Y.T)
 
-        if 'X_val' in inspect.getargspec(self.estimator.fit).args and \
+        if 'X_val' in inspect.getfullargspec(self.estimator.fit).args and \
             X_val is not None:
             if X_val.shape[1] == 2:
                 x_val_columns = (X_val[:,1].ravel().T, )

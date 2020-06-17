@@ -29,6 +29,7 @@ from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.svm import SVC
 from sklearn.preprocessing import label_binarize
+from sklearn.dummy import DummyClassifier
 
 # ifc libs
 from ifclibs import training, loaders, cleaning
@@ -61,7 +62,7 @@ from data_wrappers.datasets import Data
 import logging
 
 classifiers = {
-      'mock': MockClassifier(),
+      'mock': DummyClassifier(strategy="prior"),
       'nbayes': GaussianNB(),
       'logistic': LogisticRegression(random_state=42),
       #'adao': our.AdaBoostClassifier(n_estimators=200),
@@ -204,7 +205,7 @@ def compute_all(args):
     logging.info(locals())
 
     skf = training.RandomOversamplingPredefinedSplit(folds=test_fold, indices=True)
-    df = MyDataFrame(columns=columns)
+    df = []
     class_counts = np.bincount(dataset.target)
     t = dataset.target
     fold_id = 0
@@ -227,7 +228,7 @@ def compute_all(args):
          mces, cms, mean_probas, cl, exec_time) = results
 
         for method in methods:
-            df = df.append_rows([[dataset.name, dataset.n_classes,
+            df.append([dataset.name, dataset.n_classes,
                                   dataset.n_features, dataset.n_samples,
                                   method, mc, fold_id, train_acc[method],
                                   train_loss[method], train_brier[method],
@@ -242,10 +243,10 @@ def compute_all(args):
                                   exec_time[method],
                                   [{key: serializable_or_string(value) for key, value in
                                       c.calibrator.__dict__.items()} for c in cl[method]]
-                                  ]])
+                                  ])
 
         fold_id += 1
-    return df
+    return pandas.DataFrame(df, columns=columns)
 
 
 # FIXME seed_num is not being used at the moment
@@ -298,17 +299,14 @@ def main(seed_num, mc_iterations, classifier_names, results_path,
                 n_workers = cpu_count()
 
             if n_workers == 1:
-                map_f = map
+                dfs = map(compute_all, args)
             else:
                 if n_workers > len(args):
                     n_workers = len(args)
 
-                p = Pool(n_workers)
-                map_f = p.map
-
-            logging.info('{} jobs will be deployed in {} workers'.format(
-                len(args), n_workers))
-            dfs = map_f(compute_all, args)
+                with Pool(n_workers) as pool:
+                    logging.info('{} jobs will be deployed in {} workers'.format(len(args), n_workers))
+                    dfs = pool.map(compute_all, args)
 
             df = df.concat(dfs)
 

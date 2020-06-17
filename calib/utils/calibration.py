@@ -100,6 +100,7 @@ def cv_calibration(base_classifier, methods, x_train, y_train, x_test,
     train_full_ece = {method: 0 for method in methods}
     train_mce = {method: 0 for method in methods}
 
+    n_folds = cv.get_n_splits()
     for i, (train, cali) in enumerate(cv.split(X=x_train, y=y_train)):
         print('Evaluation of split {} of {}'.format(i+1, cv))
         x_t = x_train[train]
@@ -121,17 +122,17 @@ def cv_calibration(base_classifier, methods, x_train, y_train, x_test,
             end = time.time()
             exec_time[method].append(end - start)
             predicted_proba = ccv.predict_proba(x_test)
-            mean_probas[method] += predicted_proba / cv
+            mean_probas[method] += predicted_proba / n_folds
             classifiers[method].append(ccv)
 
             predicted_proba = ccv.predict_proba(x_c)
-            train_acc[method] += np.mean(predicted_proba.argmax(axis=1) == y_train[cali])/cv
-            train_loss[method] += cross_entropy(predicted_proba, y_train_bin[cali])/cv
-            train_brier[method] += brier_score(predicted_proba, y_train_bin[cali])/cv
-            train_guo_ece[method] += guo_ECE(predicted_proba, y_train[cali])/cv
-            train_cla_ece[method] += classwise_ECE(predicted_proba, y_train_bin[cali])/cv
-            train_full_ece[method] += full_ECE(predicted_proba, y_train_bin[cali])/cv
-            train_mce[method] += MCE(predicted_proba, y_train[cali])/cv
+            train_acc[method] += np.mean(predicted_proba.argmax(axis=1) == y_train[cali])/n_folds
+            train_loss[method] += cross_entropy(predicted_proba, y_train_bin[cali])/n_folds
+            train_brier[method] += brier_score(predicted_proba, y_train_bin[cali])/n_folds
+            train_guo_ece[method] += guo_ECE(predicted_proba, y_train[cali])/n_folds
+            train_cla_ece[method] += classwise_ECE(predicted_proba, y_train_bin[cali])/n_folds
+            train_full_ece[method] += full_ECE(predicted_proba, y_train_bin[cali])/n_folds
+            train_mce[method] += MCE(predicted_proba, y_train[cali])/n_folds
 
     y_test_bin = binarizer.transform(y_test)
     if y_test_bin.shape[1] == 1:
@@ -158,13 +159,13 @@ def cv_calibration(base_classifier, methods, x_train, y_train, x_test,
     print('Computing full ECE')
     full_eces = {method: full_ECE(mean_probas[method], y_test_bin) for method in methods}
     print('Computing p-test binary Guo ECE')
-    p_guo_eces = {method: pECE(mean_probas[method], y_test_bin, samples=1000,
+    p_guo_eces = {method: pECE(mean_probas[method], y_test_bin, samples=10, # TODO was 1000!
                               ece_function=guo_ECE) for method in methods}
     print('Computing p-test classwise ECE')
-    p_cla_eces = {method: pECE(mean_probas[method], y_test_bin, samples=1000,
+    p_cla_eces = {method: pECE(mean_probas[method], y_test_bin, samples=10, # TODO was 1000!
                                ece_function=classwise_ECE) for method in methods}
     print('Computing p-test full ECE')
-    p_full_eces = {method: pECE(mean_probas[method], y_test_bin, samples=1000) for method in methods}
+    p_full_eces = {method: pECE(mean_probas[method], y_test_bin, samples=10) for method in methods} # TODO was 1000!
     print('Computing MCE')
     mces = {method: MCE(mean_probas[method], y_test) for method in methods}
     mean_time = {method: np.mean(exec_time[method]) for method in methods}
