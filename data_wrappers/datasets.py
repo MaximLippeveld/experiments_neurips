@@ -104,15 +104,7 @@ class Dataset(object):
         return self._data.shape[0]
 
     def __str__(self):
-        return("Name = {}\n"
-               "Data shape = {}\n"
-               "Target shape = {}\n"
-               "Target classes = {}\n"
-               "Target labels = {}\n"
-               "Target counts = {}").format(self.name, self.data.shape,
-                                            self.target.shape, self.classes,
-                                            self.names, self.counts)
-
+        return self.name
 
 class Data:
 

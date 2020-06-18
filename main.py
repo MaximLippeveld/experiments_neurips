@@ -197,12 +197,13 @@ def compute_all(args):
         exec_time : float
             Mean calibration time for the inner folds
     '''
+    logger = logging.getLogger(__name__)
+
     (dataset, test_fold, nested_test_folds, mc, classifier_name, methods, verbose) = args
     if isinstance(methods, str):
         methods = (methods,)
     classifier = classifiers[classifier_name]
     score_type = score_types[classifier_name]
-    logging.info(locals())
 
     skf = training.RandomOversamplingPredefinedSplit(folds=test_fold, indices=True)
     df = []
@@ -212,8 +213,9 @@ def compute_all(args):
     n_folds = skf.get_n_splits()
     for i, ((train_idx, test_idx), nested_test_fold) in enumerate(zip(skf.split(X=dataset.data,
                                                         y=dataset.target), nested_test_folds)):
-        logging.info('Dataset {}, Monte Carlo iteration {}, fold {} of {}'.format(
-              dataset, mc+1, i+1, n_folds))
+        
+        logger.info(f'{classifier_name}, {dataset}, {mc}, {str(methods)}: outer fold {i+1} of {n_folds}')
+
         x_train, y_train = dataset.data[train_idx], dataset.target[train_idx]
         x_test, y_test = dataset.data[test_idx], dataset.target[test_idx]
 
@@ -254,8 +256,18 @@ def main(seed_num, mc_iterations, classifier_names, results_path,
 		 verbose, methods, n_workers, fig_titles=False):
     if not fig_titles:
         title = None
-    logging.basicConfig(level=verbose)
-    logging.info(locals())
+
+    # setup logging
+    logging.basicConfig(format="%(levelname)s:%(asctime)s|%(name)s|%(process)d - %(message)s", level=verbose)
+    logging.captureWarnings(True)
+    warn_logger = logging.getLogger('py.warnings')
+    warn_logger.propagate = False
+    warn_handler = logging.FileHandler("warnings.log")
+    warn_logger.addHandler(warn_handler)
+
+    logger = logging.getLogger(__name__)
+
+    logger.debug(locals())
 
     columns_hist = ['classifier', 'dataset', 'calibration'] + \
                    ['{}-{}'.format(i/10, (i+1)/10) for i in range(0,10)]
@@ -267,33 +279,29 @@ def main(seed_num, mc_iterations, classifier_names, results_path,
         results_path = os.path.join(results_path_root, classifier_name)
 
         for name, dataset in data.datasets.items():
+            logger.info(dataset)
 
             test_fold, nested_test_folds, n_folds, n_inner_folds = dataset.folds
 
             df = MyDataFrame(columns=columns)
-            logging.info(dataset)
             # Assert that every class has enough samples to perform the two
             # cross-validataion steps (classifier + calibrator)
             smaller_count = min(dataset.counts)
             if (smaller_count < n_folds) or \
                ((smaller_count*(n_folds-1)/n_folds) < n_inner_folds):
-                logging.warn(("At least one of the classes does not have enough "
+                raise ValueError(("At least one of the classes does not have enough "
                              "samples for outer {} folds and inner {} folds"
                             ).format(n_folds, n_inner_folds))
-                logging.warn("Removing dataset from experiments and skipping")
-                continue
 
             mcs = np.arange(mc_iterations)
-            logging.info(dataset)
-            #shared.setConst(**{name: dataset})
             # All the arguments as a list of lists
             args = [[dataset], [test_fold], [nested_test_folds], mcs, [classifier_name],
                     methods, [verbose]]
             args = list(itertools.product(*args))
 
-            logging.info('There are ' + str(len(args)) + ' sets of arguments that need to be run')
-            logging.debug('The following is a list with all the arguments')
-            logging.debug(args)
+            logger.info('There are ' + str(len(args)) + ' sets of arguments that need to be run')
+            logger.debug('The following is a list with all the arguments')
+            logger.debug(args)
 
             if n_workers == -1:
                 n_workers = cpu_count()
@@ -305,8 +313,10 @@ def main(seed_num, mc_iterations, classifier_names, results_path,
                     n_workers = len(args)
 
                 with Pool(n_workers) as pool:
-                    logging.info('{} jobs will be deployed in {} workers'.format(len(args), n_workers))
+                    logger.info('{} jobs will be deployed in {} workers'.format(len(args), n_workers))
                     dfs = pool.map(compute_all, args)
+
+            logger.info("All results are collected.")
 
             df = df.concat(dfs)
 
@@ -314,6 +324,7 @@ def main(seed_num, mc_iterations, classifier_names, results_path,
                 os.makedirs(results_path)
 
             # Export score distributions for dataset + classifier + calibrator
+            logger.info("Exporting score distributions")
             def MakeList(x):
                 T = tuple(x)
                 if len(T) > 1:
@@ -378,6 +389,7 @@ def main(seed_num, mc_iterations, classifier_names, results_path,
                 #                   range(row['n_classes'])]
 
             # Export reliability diagrams per dataset + classifier + calibrator
+            logger.info("Exporting reliability diagrams")
             g = df.groupby(['dataset', 'method'])
             df_scores = g.agg({'y_test': MakeList,
                                'c_probas': MakeList,
@@ -425,22 +437,7 @@ def main(seed_num, mc_iterations, classifier_names, results_path,
                                                          method,
                                                          'raw_results.csv'])))
 
-            table = df[df.dataset == name].pivot_table(
-                        values=['train_acc', 'train_loss', 'train_brier',
-                                'train_guo-ece', 'train_cla-ece',
-                                'train_full-ece',
-                                'train_mce'],
-                        index=['method'], aggfunc=[np.mean, np.std])
-            logging.info(table)
-
-            table = df[df.dataset == name].pivot_table(
-                        values=['acc', 'loss', 'brier', 'guo-ece', 'cla-ece',
-                                'full-ece', 'p-guo-ece', 'p-cla-ece',
-                                'p-full-ece', 'mce'],
-                        index=['method'], aggfunc=[np.mean, np.std])
-            logging.info(table)
-
-            logging.info('Histogram of all the scores')
+            logger.info('Saving histogram of all the scores')
             for method in methods:
                 hist = np.histogram(np.concatenate(
                             df[df.dataset == name][df.method ==
@@ -451,8 +448,6 @@ def main(seed_num, mc_iterations, classifier_names, results_path,
                                       columns=columns_hist)
                 df_hist.to_csv(os.path.join(results_path, '_'.join(
                     [classifier_name, name, method, 'score_histogram.csv'])))
-                logging.info(df_hist)
-            logging.info('-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-')
 
 
 if __name__ == '__main__':
