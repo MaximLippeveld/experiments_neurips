@@ -159,13 +159,13 @@ def cv_calibration(base_classifier, methods, x_train, y_train, x_test,
     print('Computing full ECE')
     full_eces = {method: full_ECE(mean_probas[method], y_test_bin) for method in methods}
     print('Computing p-test binary Guo ECE')
-    p_guo_eces = {method: pECE(mean_probas[method], y_test_bin, samples=10, # TODO was 1000!
+    p_guo_eces = {method: pECE(mean_probas[method], y_test_bin, samples=100, # TODO was 1000!
                               ece_function=guo_ECE) for method in methods}
     print('Computing p-test classwise ECE')
-    p_cla_eces = {method: pECE(mean_probas[method], y_test_bin, samples=10, # TODO was 1000!
+    p_cla_eces = {method: pECE(mean_probas[method], y_test_bin, samples=100, # TODO was 1000!
                                ece_function=classwise_ECE) for method in methods}
     print('Computing p-test full ECE')
-    p_full_eces = {method: pECE(mean_probas[method], y_test_bin, samples=10) for method in methods} # TODO was 1000!
+    p_full_eces = {method: pECE(mean_probas[method], y_test_bin, samples=100) for method in methods} # TODO was 1000!
     print('Computing MCE')
     mces = {method: MCE(mean_probas[method], y_test) for method in methods}
     mean_time = {method: np.mean(exec_time[method]) for method in methods}
