@@ -81,6 +81,9 @@ def cv_calibration(base_classifier, methods, x_train, y_train, x_test,
     mean_time : dict of float
         Mean calibration time for the inner folds
     '''
+
+    logger = logging.getLogger(__name__)
+
     # Ensure the same classes in train and test partitions
     assert_array_equal(np.unique(y_train), np.unique(y_test))
 
@@ -102,7 +105,7 @@ def cv_calibration(base_classifier, methods, x_train, y_train, x_test,
 
     n_folds = cv.get_n_splits()
     for i, (train, cali) in enumerate(cv.split(X=x_train, y=y_train)):
-        print('Evaluation of split {} of {}'.format(i+1, cv))
+
         x_t = x_train[train]
         y_t = y_train[train]
         x_c = x_train[cali]
@@ -111,16 +114,19 @@ def cv_calibration(base_classifier, methods, x_train, y_train, x_test,
         assert_array_equal(np.unique(y_t), np.unique(y_c))
 
         classifier = clone(base_classifier)
+
+        logger.info(f'{type(base_classifier).__name__}: inner fold {i+1} of {n_folds}, fitting')
         classifier.fit(x_t, y_t)
+        logger.info(f'{type(base_classifier).__name__}: inner fold {i+1} of {n_folds}, fitted')
         for method in methods:
-            logger.debug("Calibrating with {}".format( 'none' if method is None
-                                               else method))
+            logger.info(f'{type(base_classifier).__name__}: inner fold {i+1} of {n_folds}, calibrating with {method}')
             start = time.time()
             ccv = CalibratedModel(base_estimator=classifier, method=method,
                                   score_type=score_type)
             ccv.fit(x_c, y_c, X_val=x_t, y_val=y_t) # x_t and y_t for validation
             end = time.time()
             exec_time[method].append(end - start)
+            logger.info(f'{type(base_classifier).__name__}: inner fold {i+1} of {n_folds}, calibrated with {method} in {exec_time[method][-1]}')
             predicted_proba = ccv.predict_proba(x_test)
             mean_probas[method] += predicted_proba / n_folds
             classifiers[method].append(ccv)
@@ -134,39 +140,39 @@ def cv_calibration(base_classifier, methods, x_train, y_train, x_test,
             train_full_ece[method] += full_ECE(predicted_proba, y_train_bin[cali])/n_folds
             train_mce[method] += MCE(predicted_proba, y_train[cali])/n_folds
 
+    logger.info(f'{type(base_classifier).__name__}: computing metrics on test set for {str(methods)}')
+    
     y_test_bin = binarizer.transform(y_test)
     if y_test_bin.shape[1] == 1:
         y_test_bin = np.hstack((1 - y_test_bin, y_test_bin))
-    # TODO we are doing a bootstrap of calibration methods... Shouldn't we
-    # asses the performance of each individual calibrator and then compute the
-    # mean? Is this the same?
-    print('Computing Log-loss')
+    
+    logger.debug(f'{type(base_classifier).__name__}, Computing Log-loss')
     losses = {method: cross_entropy(mean_probas[method], y_test_bin) for method
               in methods}
-    print('Computing Accuracy')
+    logger.debug(f'{type(base_classifier).__name__}, Computing Accuracy')
     accs = {method: np.mean((mean_probas[method].argmax(axis=1)) == y_test) for method
             in methods}
-    print('Computing Brier score')
+    logger.debug(f'{type(base_classifier).__name__}, Computing Brier score')
     briers = {method: brier_score(mean_probas[method], y_test_bin) for method
               in methods}
-    print('Computing confusion matrix')
+    logger.debug(f'{type(base_classifier).__name__}, Computing confusion matrix')
     cms = {method: confusion_matrix(y_test, mean_probas[method].argmax(axis=1)) for method
               in methods}
-    print('Computing binary guo_ECE')
+    logger.debug(f'{type(base_classifier).__name__}, Computing binary guo_ECE')
     guo_eces = {method: guo_ECE(mean_probas[method], y_test) for method in methods}
-    print('Computing classwise ECE')
+    logger.debug(f'{type(base_classifier).__name__}, Computing classwise ECE')
     cla_eces = {method: classwise_ECE(mean_probas[method], y_test_bin) for method in methods}
-    print('Computing full ECE')
+    logger.debug(f'{type(base_classifier).__name__}, Computing full ECE')
     full_eces = {method: full_ECE(mean_probas[method], y_test_bin) for method in methods}
-    print('Computing p-test binary Guo ECE')
+    logger.debug(f'{type(base_classifier).__name__}, Computing p-test binary Guo ECE')
     p_guo_eces = {method: pECE(mean_probas[method], y_test_bin, samples=100, # TODO was 1000!
                               ece_function=guo_ECE) for method in methods}
-    print('Computing p-test classwise ECE')
+    logger.debug(f'{type(base_classifier).__name__}, Computing p-test classwise ECE')
     p_cla_eces = {method: pECE(mean_probas[method], y_test_bin, samples=100, # TODO was 1000!
                                ece_function=classwise_ECE) for method in methods}
-    print('Computing p-test full ECE')
+    logger.debug(f'{type(base_classifier).__name__}, Computing p-test full ECE')
     p_full_eces = {method: pECE(mean_probas[method], y_test_bin, samples=100) for method in methods} # TODO was 1000!
-    print('Computing MCE')
+    logger.debug(f'{type(base_classifier).__name__}, Computing MCE')
     mces = {method: MCE(mean_probas[method], y_test) for method in methods}
     mean_time = {method: np.mean(exec_time[method]) for method in methods}
     return (train_acc, train_loss, train_brier, train_guo_ece, train_cla_ece,
