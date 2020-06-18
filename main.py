@@ -100,9 +100,9 @@ score_types = {
 columns = ['dataset', 'n_classes', 'n_features', 'n_samples', 'method', 'mc',
            'test_fold', 'train_acc', 'train_loss', 'train_brier',
            'train_guo-ece', 'train_cla-ece', 'train_full-ece',
-           'train_mce',
+           'train_mce', 'train_balacc',
            'acc', 'loss', 'brier', 'guo-ece', 'cla-ece', 'full-ece',
-           'p-guo-ece', 'p-cla-ece', 'p-full-ece', 'mce',
+           'p-guo-ece', 'p-cla-ece', 'p-full-ece', 'mce', 'balacc',
            'confusion_matrix', 'c_probas', 'y_test', 'exec_time',
            'calibrators']
 
@@ -225,9 +225,9 @@ def compute_all(args):
                                  y_test, cv=cv, score_type=score_type,
                                  verbose=verbose, seed=mc)
         (train_acc, train_loss, train_brier, train_guo_ece, train_cla_ece,
-         train_full_ece, train_mce, accs, losses, briers,
+         train_full_ece, train_mce, train_balacc, accs, losses, briers,
          guo_eces, cla_eces, full_eces, p_guo_eces, p_cla_eces, p_full_eces,
-         mces, cms, mean_probas, cl, exec_time) = results
+         mces, balaccs, cms, mean_probas, cl, exec_time) = results
 
         for method in methods:
             df.append([dataset.name, dataset.n_classes,
@@ -235,12 +235,12 @@ def compute_all(args):
                                   method, mc, fold_id, train_acc[method],
                                   train_loss[method], train_brier[method],
                                   train_guo_ece[method], train_cla_ece[method],
-                                  train_full_ece[method], train_mce[method],
+                                  train_full_ece[method], train_mce[method], train_balacc[method],
                                   accs[method], losses[method], briers[method],
                                   guo_eces[method], cla_eces[method],
                                   full_eces[method], p_guo_eces[method],
                                   p_cla_eces[method], p_full_eces[method],
-                                  mces[method], cms[method],
+                                  mces[method], balaccs[method], cms[method],
                                   mean_probas[method], y_test,
                                   exec_time[method],
                                   [{key: serializable_or_string(value) for key, value in

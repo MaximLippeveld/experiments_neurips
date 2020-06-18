@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.base import clone
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, balanced_accuracy_score
 from numpy.testing import assert_array_equal
 
 from calib.models.calibration import _DummyCalibration
@@ -102,6 +102,7 @@ def cv_calibration(base_classifier, methods, x_train, y_train, x_test,
     train_cla_ece = {method: 0 for method in methods}
     train_full_ece = {method: 0 for method in methods}
     train_mce = {method: 0 for method in methods}
+    train_balacc = {method: 0 for method in methods}
 
     n_folds = cv.get_n_splits()
     for i, (train, cali) in enumerate(cv.split(X=x_train, y=y_train)):
@@ -139,6 +140,7 @@ def cv_calibration(base_classifier, methods, x_train, y_train, x_test,
             train_cla_ece[method] += classwise_ECE(predicted_proba, y_train_bin[cali])/n_folds
             train_full_ece[method] += full_ECE(predicted_proba, y_train_bin[cali])/n_folds
             train_mce[method] += MCE(predicted_proba, y_train[cali])/n_folds
+            train_balacc[method] += balanced_accuracy_score(y_train[cali], predicted_proba.argmax(axis=1))/n_folds
 
     logger.info(f'{type(base_classifier).__name__}: computing metrics on test set for {str(methods)}')
     
@@ -165,19 +167,21 @@ def cv_calibration(base_classifier, methods, x_train, y_train, x_test,
     logger.debug(f'{type(base_classifier).__name__}, Computing full ECE')
     full_eces = {method: full_ECE(mean_probas[method], y_test_bin) for method in methods}
     logger.debug(f'{type(base_classifier).__name__}, Computing p-test binary Guo ECE')
-    p_guo_eces = {method: pECE(mean_probas[method], y_test_bin, samples=100, # TODO was 1000!
+    p_guo_eces = {method: pECE(mean_probas[method], y_test_bin, samples=1000, # TODO was 1000!
                               ece_function=guo_ECE) for method in methods}
     logger.debug(f'{type(base_classifier).__name__}, Computing p-test classwise ECE')
-    p_cla_eces = {method: pECE(mean_probas[method], y_test_bin, samples=100, # TODO was 1000!
+    p_cla_eces = {method: pECE(mean_probas[method], y_test_bin, samples=1000, # TODO was 1000!
                                ece_function=classwise_ECE) for method in methods}
     logger.debug(f'{type(base_classifier).__name__}, Computing p-test full ECE')
-    p_full_eces = {method: pECE(mean_probas[method], y_test_bin, samples=100) for method in methods} # TODO was 1000!
+    p_full_eces = {method: pECE(mean_probas[method], y_test_bin, samples=1000) for method in methods} # TODO was 1000!
     logger.debug(f'{type(base_classifier).__name__}, Computing MCE')
     mces = {method: MCE(mean_probas[method], y_test) for method in methods}
+    logger.debug(f'{type(base_classifier).__name__}, Computing Balanced accuracy')
+    balaccs = {method: balanced_accuracy_score(y_test, mean_probas[method].argmax(axis=1)) for method in methods}
     mean_time = {method: np.mean(exec_time[method]) for method in methods}
     return (train_acc, train_loss, train_brier, train_guo_ece, train_cla_ece,
-            train_full_ece, train_mce, accs, losses, briers, guo_eces,
-            cla_eces, full_eces, p_guo_eces, p_cla_eces, p_full_eces, mces, cms,
+            train_full_ece, train_mce, train_balacc, accs, losses, briers, guo_eces,
+            cla_eces, full_eces, p_guo_eces, p_cla_eces, p_full_eces, mces, balaccs, cms,
             mean_probas, classifiers, mean_time)
 
 
