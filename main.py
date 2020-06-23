@@ -30,6 +30,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.svm import SVC
 from sklearn.preprocessing import label_binarize
 from sklearn.dummy import DummyClassifier
+from xgboost import XGBClassifier
 from joblib import dump
 
 # ifc libs
@@ -77,7 +78,8 @@ classifiers = {
       'gp': GaussianProcessClassifier(1.0 * RBF(1.0), random_state=42),
       'tree': DecisionTreeClassifier(max_depth=5, random_state=42),
       'qda': QuadraticDiscriminantAnalysis(reg_param=0.1),
-      'lda': LinearDiscriminantAnalysis()
+      'lda': LinearDiscriminantAnalysis(),
+      'xgb': XGBClassifier(n_estimators=100, max_depth=3, n_jobs=8, subsample=0.8, objective='multi:softmax')
 }
 
 score_types = {
