@@ -30,6 +30,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.svm import SVC
 from sklearn.preprocessing import label_binarize
 from sklearn.dummy import DummyClassifier
+from joblib import dump
 
 # ifc libs
 from ifclibs import training, loaders, cleaning
@@ -106,7 +107,7 @@ columns = ['dataset', 'n_classes', 'n_features', 'n_samples', 'method', 'mc',
            'confusion_matrix', 'c_probas', 'y_test', 'exec_time',
            'calibrators']
 
-save_columns = [c for c in columns if c not in ['c_probas', 'y_test']]
+save_columns = [c for c in columns if c not in ['y_test']]
 
 
 def comma_separated_strings(s):
@@ -227,7 +228,7 @@ def compute_all(args):
         (train_acc, train_loss, train_brier, train_guo_ece, train_cla_ece,
          train_full_ece, train_mce, train_balacc, accs, losses, briers,
          guo_eces, cla_eces, full_eces, p_guo_eces, p_cla_eces, p_full_eces,
-         mces, balaccs, cms, mean_probas, cl, exec_time) = results
+         mces, balaccs, cms, probas, cl, exec_time) = results
 
         for method in methods:
             df.append([dataset.name, dataset.n_classes,
@@ -241,7 +242,7 @@ def compute_all(args):
                                   full_eces[method], p_guo_eces[method],
                                   p_cla_eces[method], p_full_eces[method],
                                   mces[method], balaccs[method], cms[method],
-                                  mean_probas[method], y_test,
+                                  probas[method], y_test,
                                   exec_time[method],
                                   [{key: serializable_or_string(value) for key, value in
                                       c.calibrator.__dict__.items()} for c in cl[method]]
@@ -323,131 +324,131 @@ def main(seed_num, mc_iterations, classifier_names, results_path,
             if not os.path.exists(results_path):
                 os.makedirs(results_path)
 
-            # Export score distributions for dataset + classifier + calibrator
-            logger.info("Exporting score distributions")
-            def MakeList(x):
-                T = tuple(x)
-                if len(T) > 1:
-                    return T
-                else:
-                    return T[0]
-            #df_scores = df.drop_duplicates(subset=['dataset', 'method'])
-            g = df.groupby(['dataset', 'method'])
-            df_scores = g.agg({'y_test': MakeList,
-                               'c_probas': MakeList,
-                               'n_classes': 'max',
-                               'method': 'first',
-                               'loss': 'mean',
-                               'brier': 'mean',
-                               'acc': 'mean',
-                               'guo-ece': 'mean',
-                               'cla-ece': 'mean',
-                               'full-ece': 'mean',
-                               'p-guo-ece': MakeList,
-                               'p-cla-ece': MakeList,
-                               'p-full-ece': MakeList,
-                               'mce': 'mean'})
-            for index, row in df_scores.iterrows():
-                filename = os.path.join(results_path, '_'.join([classifier_name,
-                                                                name,
-                                                                row['method'],
-                                                                'positive_scores']))
-                y_test = np.hstack(row['y_test'])
-                if fig_titles:
-                    title = (("{}, test samples = {}, {}\n"
-                          "acc = {:.2f}, log-loss = {:.2e},\n"
-                          "brier = {:.2e}, full-ece = {:.2e}, mce = {:.2e}")
-                           .format(name, len(y_test),
-                                   row['method'], row['acc'],
-                                   row['loss'], row['brier'], row['full-ece'],
-                                   row['mce']))
-                try:
-                    export_boxplot(method = row['method'],
-                                   scores = np.vstack(row['c_probas']),
-                                   y_test = y_test,
-                                   n_classes = row['n_classes'],
-                                   name_classes = dataset.names,
-                                   title = title,
-                                   per_class = False,
-                                   figsize=(int(row['n_classes']/2), 2),
-                                   filename=filename, file_ext='.svg')
+            # # Export score distributions for dataset + classifier + calibrator
+            # logger.info("Exporting score distributions")
+            # def MakeList(x):
+            #     T = tuple(x)
+            #     if len(T) > 1:
+            #         return T
+            #     else:
+            #         return T[0]
+            # #df_scores = df.drop_duplicates(subset=['dataset', 'method'])
+            # g = df.groupby(['dataset', 'method'])
+            # df_scores = g.agg({'y_test': MakeList,
+            #                    'c_probas': MakeList,
+            #                    'n_classes': 'max',
+            #                    'method': 'first',
+            #                    'loss': 'mean',
+            #                    'brier': 'mean',
+            #                    'acc': 'mean',
+            #                    'guo-ece': 'mean',
+            #                    'cla-ece': 'mean',
+            #                    'full-ece': 'mean',
+            #                    'p-guo-ece': MakeList,
+            #                    'p-cla-ece': MakeList,
+            #                    'p-full-ece': MakeList,
+            #                    'mce': 'mean'})
+            # for index, row in df_scores.iterrows():
+            #     filename = os.path.join(results_path, '_'.join([classifier_name,
+            #                                                     name,
+            #                                                     row['method'],
+            #                                                     'positive_scores']))
+            #     y_test = np.hstack(row['y_test'])
+            #     if fig_titles:
+            #         title = (("{}, test samples = {}, {}\n"
+            #               "acc = {:.2f}, log-loss = {:.2e},\n"
+            #               "brier = {:.2e}, full-ece = {:.2e}, mce = {:.2e}")
+            #                .format(name, len(y_test),
+            #                        row['method'], row['acc'],
+            #                        row['loss'], row['brier'], row['full-ece'],
+            #                        row['mce']))
+            #     try:
+            #         export_boxplot(method = row['method'],
+            #                        scores = np.vstack(row['c_probas']),
+            #                        y_test = y_test,
+            #                        n_classes = row['n_classes'],
+            #                        name_classes = dataset.names,
+            #                        title = title,
+            #                        per_class = False,
+            #                        figsize=(int(row['n_classes']/2), 2),
+            #                        filename=filename, file_ext='.svg')
 
-                    export_boxplot(method = row['method'],
-                                   scores = np.vstack(row['c_probas']),
-                                   y_test = y_test,
-                                   n_classes = row['n_classes'],
-                                   name_classes = dataset.names,
-                                   title = title,
-                                   per_class = True,
-                                   figsize=(int(row['n_classes']/2), 1+row['n_classes']),
-                                   filename=filename + '_per_class', file_ext='.svg')
-                except Error as e:
-                    print(e)
+            #         export_boxplot(method = row['method'],
+            #                        scores = np.vstack(row['c_probas']),
+            #                        y_test = y_test,
+            #                        n_classes = row['n_classes'],
+            #                        name_classes = dataset.names,
+            #                        title = title,
+            #                        per_class = True,
+            #                        figsize=(int(row['n_classes']/2), 1+row['n_classes']),
+            #                        filename=filename + '_per_class', file_ext='.svg')
+            #     except Error as e:
+            #         print(e)
 
 
-                #scores = [row['c_probas'][row['y_test'] == i].flatten() for i in
-                #                   range(row['n_classes'])]
+            #     #scores = [row['c_probas'][row['y_test'] == i].flatten() for i in
+            #     #                   range(row['n_classes'])]
 
-            # Export reliability diagrams per dataset + classifier + calibrator
-            logger.info("Exporting reliability diagrams")
-            g = df.groupby(['dataset', 'method'])
-            df_scores = g.agg({'y_test': MakeList,
-                               'c_probas': MakeList,
-                               'n_classes': 'max'})
-            for index, row in df_scores.iterrows():
-                y_test = label_binarize(np.hstack(row['y_test']),
-                                        classes=range(row['n_classes']))
-                p_pred = np.vstack(row['c_probas'])
-                try:
-                    filename = os.path.join(results_path, '_'.join([classifier_name,
-                                                                name,
-                                                                index[1],
-                                                                'rel_diagr_perclass']))
-                    fig = plot_reliability_diagram_per_class(y_true=y_test,
-                                                             p_pred=p_pred)
-                    save_fig_close(fig, filename + '.svg')
+            # # Export reliability diagrams per dataset + classifier + calibrator
+            # logger.info("Exporting reliability diagrams")
+            # g = df.groupby(['dataset', 'method'])
+            # df_scores = g.agg({'y_test': MakeList,
+            #                    'c_probas': MakeList,
+            #                    'n_classes': 'max'})
+            # for index, row in df_scores.iterrows():
+            #     y_test = label_binarize(np.hstack(row['y_test']),
+            #                             classes=range(row['n_classes']))
+            #     p_pred = np.vstack(row['c_probas'])
+            #     try:
+            #         filename = os.path.join(results_path, '_'.join([classifier_name,
+            #                                                     name,
+            #                                                     index[1],
+            #                                                     'rel_diagr_perclass']))
+            #         fig = plot_reliability_diagram_per_class(y_true=y_test,
+            #                                                  p_pred=p_pred)
+            #         save_fig_close(fig, filename + '.svg')
 
-                    filename = os.path.join(results_path, '_'.join([classifier_name,
-                                                                name,
-                                                                index[1],
-                                                                'rel_diagr']))
-                    fig = plot_multiclass_reliability_diagram(y_true=y_test,
-                                                              p_pred=p_pred)
-                    save_fig_close(fig, filename + '.svg')
+            #         filename = os.path.join(results_path, '_'.join([classifier_name,
+            #                                                     name,
+            #                                                     index[1],
+            #                                                     'rel_diagr']))
+            #         fig = plot_multiclass_reliability_diagram(y_true=y_test,
+            #                                                   p_pred=p_pred)
+            #         save_fig_close(fig, filename + '.svg')
 
-                    y_labels = np.hstack(row['y_test'])
-                    y_pred = p_pred.argmax(axis=1)
-                    y_conf = (y_labels == y_pred).astype(int)
-                    p_conf_pred = p_pred.max(axis=1)
-                    filename = os.path.join(results_path, '_'.join([classifier_name,
-                                                                name,
-                                                                index[1],
-                                                                'conf_rel_diagr']))
-                    fig = plot_multiclass_reliability_diagram(
-                        y_true=y_conf, p_pred=p_conf_pred,
-                        labels=['Obs.  accuracy', 'Gap pred. mean'])
-                    save_fig_close(fig, filename + '.svg')
+            #         y_labels = np.hstack(row['y_test'])
+            #         y_pred = p_pred.argmax(axis=1)
+            #         y_conf = (y_labels == y_pred).astype(int)
+            #         p_conf_pred = p_pred.max(axis=1)
+            #         filename = os.path.join(results_path, '_'.join([classifier_name,
+            #                                                     name,
+            #                                                     index[1],
+            #                                                     'conf_rel_diagr']))
+            #         fig = plot_multiclass_reliability_diagram(
+            #             y_true=y_conf, p_pred=p_conf_pred,
+            #             labels=['Obs.  accuracy', 'Gap pred. mean'])
+            #         save_fig_close(fig, filename + '.svg')
 
-                except:
-                    print("Unexpected error:" + sys.exc_info()[0])
+            #     except:
+            #         print("Unexpected error:" + sys.exc_info()[0])
 
             for method in methods:
-                df[df['method'] == method][save_columns].to_csv(
-                    os.path.join(results_path, '_'.join([classifier_name, name,
+                c_probas_file = os.path.join(results_path, '_'.join([classifier_name, name,
                                                          method,
-                                                         'raw_results.csv'])))
+                                                         'raw_results.dat']))
+                dump(df[df['method'] == method][save_columns], c_probas_file)
 
-            logger.info('Saving histogram of all the scores')
-            for method in methods:
-                hist = np.histogram(np.concatenate(
-                            df[df.dataset == name][df.method ==
-                                                   method]['c_probas'].values),
-                            range=(0.0, 1.0))
-                df_hist = MyDataFrame(data=[[classifier_name, name, method] +
-                                           hist[0].tolist()],
-                                      columns=columns_hist)
-                df_hist.to_csv(os.path.join(results_path, '_'.join(
-                    [classifier_name, name, method, 'score_histogram.csv'])))
+            # logger.info('Saving histogram of all the scores')
+            # for method in methods:
+            #     hist = np.histogram(np.concatenate(
+            #                 df[df.dataset == name][df.method ==
+            #                                        method]['c_probas'].values),
+            #                 range=(0.0, 1.0))
+            #     df_hist = MyDataFrame(data=[[classifier_name, name, method] +
+            #                                hist[0].tolist()],
+            #                           columns=columns_hist)
+            #     df_hist.to_csv(os.path.join(results_path, '_'.join(
+            #         [classifier_name, name, method, 'score_histogram.csv'])))
 
 
 if __name__ == '__main__':
