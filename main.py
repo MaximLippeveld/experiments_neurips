@@ -97,7 +97,8 @@ score_types = {
       'gp': 'predict_proba',
       'tree': 'predict_proba',
       'qda': 'predict_proba',
-      'lda': 'predict_proba'
+      'lda': 'predict_proba',
+      'xgb': 'predict_proba'
 }
 
 columns = ['dataset', 'n_classes', 'n_features', 'n_samples', 'method', 'mc',
