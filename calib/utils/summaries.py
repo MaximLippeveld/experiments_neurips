@@ -100,12 +100,14 @@ def compute_friedmanchisquare(table):
 
 def paired_test(table, stats_func=ranksums):
     measure = table.columns.levels[0].values[0]
-    pvalues = np.zeros((table.columns.shape[0], table.columns.shape[0]))
+    pvalues = np.full((table.columns.shape[0], table.columns.shape[0]), fill_value=np.nan)
     statistics = np.zeros_like(pvalues)
     for i, method_i in enumerate(table.columns.levels[1]):
         for j, method_j in enumerate(table.columns.levels[1]):
             sample_i = table[measure, method_i]
             sample_j = table[measure, method_j]
+
+            if (sample_i == sample_j).all(): continue
             statistic, pvalue = stats_func(sample_i, sample_j)
             pvalues[i, j] = pvalue
             statistics[i, j] = statistic
