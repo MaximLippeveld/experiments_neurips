@@ -30,6 +30,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.svm import SVC
 from sklearn.preprocessing import label_binarize
 from sklearn.dummy import DummyClassifier
+from sklearn.linear_model import SGDClassifier
 from xgboost import XGBClassifier
 from joblib import dump
 
@@ -74,12 +75,13 @@ classifiers = {
       'svm': SVC(probability=True, random_state=42),
       'knn': KNeighborsClassifier(3),
       'svc-linear': SVC(kernel="linear", C=0.025, probability=True, random_state=42),
+      'svm-linear': SGDClassifier(loss="log"),
       'svc-rbf': SVC(gamma=2, C=1, probability=True, random_state=42),
       'gp': GaussianProcessClassifier(1.0 * RBF(1.0), random_state=42),
       'tree': DecisionTreeClassifier(max_depth=5, random_state=42),
       'qda': QuadraticDiscriminantAnalysis(reg_param=0.1),
       'lda': LinearDiscriminantAnalysis(),
-      'xgb': XGBClassifier(n_estimators=100, max_depth=3, n_jobs=8, subsample=0.8, objective='multi:softmax')
+      'xgb': XGBClassifier(n_estimators=100, n_jobs=8, objective='multi:softmax')
 }
 
 score_types = {
@@ -98,7 +100,8 @@ score_types = {
       'tree': 'predict_proba',
       'qda': 'predict_proba',
       'lda': 'predict_proba',
-      'xgb': 'predict_proba'
+      'xgb': 'predict_proba',
+      'svm-linear': 'predict_proba'
 }
 
 columns = ['dataset', 'n_classes', 'n_features', 'n_samples', 'method', 'mc',
