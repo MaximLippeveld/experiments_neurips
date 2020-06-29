@@ -402,8 +402,7 @@ def main(seed_num, mc_iterations, classifier_names, results_path,
             #                    'c_probas': MakeList,
             #                    'n_classes': 'max'})
             # for index, row in df_scores.iterrows():
-            #     y_test = label_binarize(np.hstack(row['y_test']),
-            #                             classes=range(row['n_classes']))
+            #     y_test = label_binarize(np.hstack(row['y_test']), classes=range(row['n_classes']))
             #     p_pred = np.vstack(row['c_probas'])
             #     try:
             #         filename = os.path.join(results_path, '_'.join([classifier_name,

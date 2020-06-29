@@ -14,13 +14,13 @@ class TestFunctions(unittest.TestCase):
 
     def test_classwise_ece(self):
         S = np.array([[0.6, 0.2, 0.2]]*10)
-        Y = label_binarize([0, 0, 0, 0, 0, 0, 1, 1, 2, 2], range(3))
+        Y = label_binarize([0, 0, 0, 0, 0, 0, 1, 1, 2, 2], classes=range(3))
         ece = classwise_ECE(S, Y)
         self.assertAlmostEqual(ece, 0)
 
     def test_full_ece(self):
         S = np.array([[0.6, 0.2, 0.2]]*10)
-        Y = label_binarize([0, 0, 0, 0, 0, 0, 1, 1, 2, 2], range(3))
+        Y = label_binarize([0, 0, 0, 0, 0, 0, 1, 1, 2, 2], classes=range(3))
         ece = full_ECE(S, Y)
         self.assertAlmostEqual(ece, 0)
 
