@@ -323,7 +323,7 @@ def main(seed_num, mc_iterations, classifier_names, results_path,
                     logger.info('{} jobs will be deployed in {} workers'.format(len(args), n_workers))
                     dfs = pool.map(compute_all, args)
 
-            logger.info("All results are collected.")
+            logger.info(f"All results are collected for {name}, {classifier_name}.")
 
             df = df.concat(dfs)
 
