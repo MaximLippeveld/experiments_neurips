@@ -113,7 +113,7 @@ columns = ['dataset', 'n_classes', 'n_features', 'n_samples', 'method', 'mc',
            'confusion_matrix', 'c_probas', 'y_test', 'exec_time',
            'calibrators']
 
-save_columns = [c for c in columns if c not in ['y_test']]
+save_columns = [c for c in columns if c not in ['y_test', 'calibrators']]
 
 
 def comma_separated_strings(s):
